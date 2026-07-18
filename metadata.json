@@ -1,0 +1,13 @@
+{
+  "name": "Remix: SwiftPay App - Rohit",
+  "description": "A high-performance, real-time payment app with UPI QR, Card payments, and transaction history.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera",
+    "publickey-credentials-create",
+    "publickey-credentials-get"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

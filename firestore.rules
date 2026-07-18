@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isAdmin() {
+      return true; // Simplified for mock admin dashboard
+    }
+
+    function isValidTransaction(data) {
+      return data.id is string && data.id.size() <= 64
+        && data.amount is number && data.amount > 0
+        && data.get('recipientUpi', '') is string && data.get('recipientUpi', '').size() <= 256
+        && data.method in ['UPI_QR', 'UPI_ID', 'CARD', 'INSTANT_APP']
+        && data.status in ['PENDING', 'SUCCESS', 'FAILED']
+        && (data.timestamp is timestamp || data.timestamp is number)
+        && (data.get('senderUid', null) == null || (data.get('senderUid', '') is string && data.get('senderUid', '').size() <= 128))
+        && (data.get('senderEmail', null) == null || (data.get('senderEmail', '') is string && data.get('senderEmail', '').size() <= 256))
+        && (data.get('senderName', null) == null || (data.get('senderName', '') is string && data.get('senderName', '').size() <= 256))
+        && (data.get('recipientUid', null) == null || (data.get('recipientUid', '') is string && data.get('recipientUid', '').size() <= 128));
+    }
+
+    function isValidLogin(data) {
+      return data.uid is string && data.uid.size() <= 128
+        && data.name is string && data.name.size() <= 256
+        && data.email is string && data.email.size() <= 256
+        && data.isSharedLink is bool
+        && data.location is string && data.location.size() <= 128
+        && data.userAgent is string && data.userAgent.size() <= 512
+        && data.timestamp is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.adminId is string && data.adminId.size() <= 128
+        && data.adminEmail is string && data.adminEmail.size() <= 256
+        && data.action is string && data.action.size() <= 128
+        && (data.targetId == null || (data.targetId is string && data.targetId.size() <= 128))
+        && data.details is string && data.details.size() <= 2048
+        && data.timestamp is timestamp;
+    }
+
+    match /user_profiles/{profileId} {
+      allow get: if true;
+      allow list: if true;
+      allow create, update: if request.auth != null && (
+        (request.auth.uid == profileId && incoming().uid == request.auth.uid && incoming().upi is string && incoming().upi.size() <= 256)
+        || isAdmin()
+      );
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /transactions/{transactionId} {
+      allow create: if isValidId(transactionId) 
+        && isValidTransaction(incoming())
+        && (incoming().status == 'PENDING' || isAdmin())
+        && (incoming().timestamp == request.time || incoming().timestamp is number)
+        && (request.auth != null || incoming().amount <= 50000);
+      allow get: if isValidId(transactionId);
+      allow list: if isAdmin()
+        || (request.auth != null && (resource.data.senderUid == request.auth.uid || resource.data.recipientUid == request.auth.uid));
+      allow update: if isValidId(transactionId) && (
+        isAdmin() || (
+          request.auth != null && (existing().get('senderUid', '') == request.auth.uid)
+          && existing().status == 'PENDING' && incoming().status == 'FAILED'
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'error', 'updatedAt', 'timestamp'])
+        )
+      );
+    }
+    
+    match /user_login_logs/{logId} {
+      allow create: if true;
+      allow read, list: if isAdmin();
+    }
+
+    match /logins/{loginId} {
+      allow create: if request.auth != null && isValidId(loginId) && isValidLogin(incoming());
+      allow read, list: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if request.auth != null && (request.auth.uid == adminId || isAdmin());
+    }
+
+    match /audit_logs/{logId} {
+      allow create: if request.auth != null && isAdmin() && isValidId(logId) && isValidAuditLog(incoming());
+      allow read, list: if isAdmin();
+    }
+
+    match /referrals/{referralId} {
+      allow read, write, update: if true;
+    }
+
+    match /security_events/{eventId} {
+      allow create: if isValidId(eventId) && incoming().type is string && incoming().details is string && incoming().severity is string;
+      allow read, list: if isAdmin();
+    }
+
+    match /user_backups/{backupId} {
+      allow read, write: if isValidId(backupId);
+    }
+    
+    match /blocked_users/{userId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /support_tickets/{ticketId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

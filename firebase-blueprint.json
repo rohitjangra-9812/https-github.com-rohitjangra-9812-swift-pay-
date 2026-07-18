@@ -1,0 +1,223 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A payment transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "recipientUpi": {
+          "type": "string"
+        },
+        "payerUpi": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "UPI_QR",
+            "UPI_ID",
+            "CARD",
+            "INSTANT_APP"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "SUCCESS",
+            "FAILED",
+            "REFUNDED"
+          ]
+        },
+        "timestamp": {
+          "type": "number"
+        },
+        "details": {
+          "type": "string"
+        },
+        "senderUid": {
+          "type": "string"
+        },
+        "senderEmail": {
+          "type": "string"
+        },
+        "senderName": {
+          "type": "string"
+        },
+        "recipientUid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "amount",
+        "recipientUpi",
+        "method",
+        "status",
+        "timestamp"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Log of administrative actions",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "adminId": {
+          "type": "string"
+        },
+        "adminEmail": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "details": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "object",
+          "description": "Server timestamp"
+        }
+      },
+      "required": [
+        "adminId",
+        "action",
+        "timestamp"
+      ]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "A user referral with rewards status",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "referrerUpi": {
+          "type": "string"
+        },
+        "referredUpi": {
+          "type": "string"
+        },
+        "referredName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "REGISTERED",
+            "REWARDED"
+          ]
+        },
+        "rewardAmount": {
+          "type": "number"
+        },
+        "timestamp": {
+          "type": "object",
+          "description": "Server timestamp"
+        }
+      },
+      "required": [
+        "referrerUpi",
+        "referredUpi",
+        "status"
+      ]
+    },
+    "SecurityEvent": {
+      "title": "SecurityEvent",
+      "description": "A security rule trigger or fraud detection alert",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "details": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "details",
+        "severity",
+        "timestamp"
+      ]
+    },
+    "UserBackup": {
+      "title": "UserBackup",
+      "description": "Backup of user bank account state",
+      "type": "object",
+      "properties": {
+        "bankDetails": {
+          "type": "object"
+        },
+        "bankAccounts": {
+          "type": "array"
+        },
+        "isBankLinked": {
+          "type": "boolean"
+        },
+        "verifiedMobile": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of payment transactions"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Collection of administrative audit logs"
+    },
+    "/logins/{loginId}": {
+      "schema": "object",
+      "description": "Track recent user logins for real-time notifications"
+    },
+    "/admins/{adminId}": {
+      "schema": "object",
+      "description": "Whitelist of verified administrator UIDs"
+    },
+    "/user_profiles/{profileId}": {
+      "schema": "object",
+      "description": "Maps verified workspace user IDs to their custom persistent UPI identities and metadata"
+    },
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Collection of user referrals and rewards tracking"
+    },
+    "/security_events/{eventId}": {
+      "schema": "SecurityEvent",
+      "description": "Collection of triggered security rules and fraud-detection events"
+    },
+    "/user_backups/{backupId}": {
+      "schema": "UserBackup",
+      "description": "User bank account state backups"
+    }
+  }
+}

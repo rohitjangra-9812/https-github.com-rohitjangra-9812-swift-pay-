@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  /* Hide number input arrows */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  /* Smooth transition for theme toggling */
+  html, body, div, header, main, section, aside, footer, p, span, h1, h2, h3, h4, h5, h6, button, input, textarea, select, svg, label, a {
+    transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                color 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes gemini-glow-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.gemini-glow-container {
+  position: relative;
+  border-radius: 28px;
+  padding: 2.5px; /* Thicker premium light ring */
+  overflow: hidden;
+  isolation: isolate;
+  background: #030712; /* Rich pitch-black background underlay so the neon lights stand out brilliantly */
+  /* Saturated neon atmospheric halos */
+  box-shadow: 
+    0 12px 36px -12px rgba(139, 92, 246, 0.4),
+    0 0 25px rgba(168, 85, 247, 0.2),
+    0 0 50px rgba(59, 130, 246, 0.15);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gemini-glow-container:focus-within {
+  box-shadow: 
+    0 16px 44px -8px rgba(139, 92, 246, 0.55),
+    0 0 35px rgba(168, 85, 247, 0.4),
+    0 0 70px rgba(59, 130, 246, 0.25);
+  transform: scale(1.005);
+}
+
+.gemini-glow-track {
+  position: absolute;
+  top: -150%;
+  left: -150%;
+  width: 400%;
+  height: 400%;
+  /* Pure continuous saturated rainbow flow - no quiet or dull transparent spots */
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    #a855f7 0%,   /* Rich Violet */
+    #ec4899 25%,  /* Hot Pink */
+    #3b82f6 50%,  /* Electric Blue */
+    #06b6d4 75%,  /* Vibrant Cyan */
+    #a855f7 100%
+  );
+  animation: gemini-glow-rotate 4.5s linear infinite; /* Slightly faster rotation to feel more active and alive */
+  pointer-events: none;
+  z-index: 1;
+}
+
+.gemini-glow-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    #3b82f6 0%,
+    #6366f1 30%,
+    #ec4899 60%,
+    #a855f7 85%,
+    #3b82f6 100%
+  );
+  animation: gemini-glow-rotate 6.5s linear infinite reverse; /* Dynamic secondary counter-spin */
+  mix-blend-mode: color-dodge;
+  opacity: 0.85; /* Saturated blend for maximum peak illumination intensity */
+}
+
+.gemini-glow-inner {
+  position: relative;
+  z-index: 2;
+  border-radius: 26px; /* Matched precisely to outer card minus the 2.5px padding gap */
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes scanner-shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 50%, 85% { transform: translateX(-8px); }
+  32%, 68% { transform: translateX(8px); }
+}
+
+@keyframes scanner-red-flash {
+  0%, 100% { border-color: rgb(239, 68, 68); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+  50% { border-color: rgb(220, 38, 38); box-shadow: 0 0 25px rgba(220, 38, 38, 0.85); }
+}
+
+.animate-scanner-shake {
+  animation: scanner-shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.animate-scanner-red-flash {
+  animation: scanner-red-flash 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes scannerLaser {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(188px); }
+  100% { transform: translateY(0); }
+}
+
+
+
+
+@custom-variant dark (&:where(.dark, .dark *));
