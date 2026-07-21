@@ -54,6 +54,7 @@ export const BankAccountSetup = ({ onComplete }: { onComplete: (details: { name:
     e.preventDefault();
     if (pin.length !== 4 || pin !== confirmPin) return;
     localStorage.setItem('swiftpay_pin', pin);
+    localStorage.setItem('swiftpay_user_pin', pin); // Ensure App lock PIN is also set to this!
     if (referralCode) { toast.success(`Referral applied! {formatCurrency(50)} added as a welcome bonus for using ${referralCode}`, { duration: 4000 }); }
     onComplete({ name: bankDetails.name, account: bankDetails.account });
   };

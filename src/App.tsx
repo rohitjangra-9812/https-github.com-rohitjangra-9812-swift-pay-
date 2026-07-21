@@ -225,7 +225,9 @@ export default function App() {
     }
   }, [loginLockoutTime]);
 
-  const [pinMode, setPinMode] = useState(false);
+  const [pinMode, setPinMode] = useState(() => {
+    return localStorage.getItem("swiftpay_biometric_enabled") !== "true";
+  });
   const [loginPin, setLoginPin] = useState('');
   const [showPinReset, setShowPinReset] = useState(false);
   const [loginPinError, setLoginPinError] = useState(false);
