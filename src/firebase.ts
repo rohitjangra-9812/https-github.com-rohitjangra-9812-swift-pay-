@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore";
+
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import firebaseAppletConfig from "../firebase-applet-config.json";
 
 const firebaseConfig = {
@@ -14,7 +14,16 @@ const firebaseConfig = {
 
 // Initialize Firebase
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
 // Export DB with the custom database ID if specified in env
 const databaseId = firebaseAppletConfig?.firestoreDatabaseId || import.meta.env.VITE_FIREBASE_DATABASE_ID || undefined;
-export const db = getFirestore(app, databaseId);
+
+let initializedDb;
+try {
+  initializedDb = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+  }, databaseId);
+} catch (e) {
+  initializedDb = getFirestore(app, databaseId);
+}
+export const db = initializedDb;

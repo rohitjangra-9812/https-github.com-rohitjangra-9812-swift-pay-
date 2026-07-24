@@ -1,6 +1,7 @@
 import { ThemeToggle } from "./components/ThemeToggle";
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from './firebase';
 import { collection, addDoc, serverTimestamp, doc, onSnapshot } from 'firebase/firestore';
 
@@ -8,6 +9,7 @@ import { RazorpayGateway } from './components/RazorpayGateway';
 import { MockAdminDashboard } from './components/MockAdminDashboard';
 import { PinGate } from './components/PinGate';
 import { BiometricModal } from './components/BiometricModal';
+import { SmsService } from "./services/SmsService";
 import { GatewayInterface } from './components/GatewayInterface';
 import { SwiftPayGateway } from './components/SwiftPayGateway';
 import InstallButton from './components/InstallButton';
@@ -23,10 +25,17 @@ import { logSecurityEvent } from './utils/securityLogs';
 import { startPeriodicSync, syncBankAccountState } from './utils/backupSync';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('page') || 'panel';
-  });
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage = location.pathname.substring(1) || 'panel';
+  
+  const setCurrentPage = (page: string) => {
+    if (page === 'panel') {
+      navigate('/');
+    } else {
+      navigate(`/${page}`);
+    }
+  };
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isBankLinked, setIsBankLinked] = useState(() => localStorage.getItem("swiftpay_isBankLinked") === "true");
@@ -34,15 +43,7 @@ export default function App() {
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
 
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (currentPage === 'panel') {
-      url.searchParams.delete('page');
-    } else {
-      url.searchParams.set('page', currentPage);
-    }
-    window.history.replaceState({}, '', url.toString());
-  }, [currentPage]);
+
 
   useEffect(() => {
     const cleanup = startPeriodicSync();
@@ -234,26 +235,56 @@ export default function App() {
   
   const savedAppPin = localStorage.getItem('swiftpay_user_pin');
   const [isSettingPin, setIsSettingPin] = useState(!savedAppPin);
+  const [setupMobile, setSetupMobile] = useState('');
+  const [setupOtp, setSetupOtp] = useState('');
   const [setupPin, setSetupPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [setupStep, setSetupStep] = useState(1);
+  const [setupStep, setSetupStep] = useState<'mobile' | 'otp' | 'pin1' | 'pin2'>('mobile');
+  const [expectedOtp, setExpectedOtp] = useState<string | null>(null);
+  const [isSendingSms, setIsSendingSms] = useState(false);
 
-  const handleSetupPin = (e: React.FormEvent) => {
+  const handleSetupPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (setupStep === 1) {
-      if (setupPin.length === 4) setSetupStep(2);
+    if (setupStep === 'mobile') {
+      if (setupMobile.length === 10) {
+        setIsSendingSms(true);
+        const otp = SmsService.generateOtp();
+        setExpectedOtp(otp);
+        try {
+          await SmsService.sendSms({
+            to: `+91 ${setupMobile}`,
+            message: `${otp} is your SwiftPay registration code.`
+          });
+          setSetupStep('otp');
+          toast.success(`OTP sent to ${setupMobile}`);
+        } finally {
+          setIsSendingSms(false);
+        }
+      } else {
+        toast.error('Please enter a valid 10-digit mobile number.');
+      }
+    } else if (setupStep === 'otp') {
+      if (setupOtp === expectedOtp) {
+        setSetupStep('pin1');
+        toast.success('Mobile verified successfully!');
+      } else {
+        toast.error('Invalid OTP. Please check your SMS and try again.');
+      }
+    } else if (setupStep === 'pin1') {
+      if (setupPin.length === 4) setSetupStep('pin2');
     } else {
       if (setupPin === confirmPin) {
         localStorage.setItem('swiftpay_user_pin', setupPin);
         localStorage.setItem('swiftpay_pin', setupPin); // set transaction PIN to same as App PIN
+        localStorage.setItem('swiftpay_verified_mobile', setupMobile);
         setIsSettingPin(false);
         setIsAppUnlocked(true);
-        toast.success('App PIN set successfully!');
+        toast.success('Registration complete & App PIN set successfully!');
       } else {
         toast.error('PINs do not match. Try again.');
         setSetupPin('');
         setConfirmPin('');
-        setSetupStep(1);
+        setSetupStep('pin1');
       }
     }
   };
@@ -332,35 +363,26 @@ export default function App() {
     }
   };
 
+  const [showShareModal, setShowShareModal] = useState(false);
+
   const handleShare = async () => {
-    let shareUrl = window.location.href;
-    let isDevLink = false;
-    
-    if (shareUrl.includes('ais-dev-')) {
-      isDevLink = true;
-      shareUrl = shareUrl.replace('ais-dev-', 'ais-pre-');
-    }
-
-    const shareData = {
-      title: 'SwiftPay App',
-      text: 'Check out the secure SwiftPay payment app.',
-      url: shareUrl
-    };
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        if (isDevLink) toast.info('IMPORTANT: To make this link work (no 404 error), you MUST click "Share" -> "Publish" in the top right corner of AI Studio first!', { duration: 10000 });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success('Public link copied to clipboard!');
-        if (isDevLink) {
-          toast.error('IMPORTANT: This link will show a 404 error until you publish it!', { duration: 6000 });
-          toast.info('Click the "Share" button in the top right of AI Studio, then "Publish" to make the link work when AI Studio is closed.', { duration: 10000 });
+    if (window.location.href.includes('ais-dev-')) {
+      setShowShareModal(true);
+    } else {
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: 'SwiftPay App',
+            text: 'Check out the secure SwiftPay payment app.',
+            url: window.location.href
+          });
+        } else {
+          await navigator.clipboard.writeText(window.location.href);
+          toast.success('Public link copied to clipboard!');
         }
+      } catch (err) {
+        console.error('Error sharing:', err);
       }
-    } catch (err) {
-      console.error('Error sharing:', err);
     }
   };
 
@@ -401,47 +423,91 @@ if (!isAppUnlocked) {
         
         {isSettingPin ? (
           <form onSubmit={handleSetupPin} className="relative z-10 w-full max-w-xs mx-auto mb-8">
-            <h3 className="text-xl font-bold text-white mb-2">Set Up App PIN</h3>
+            <h3 className="text-xl font-bold text-white mb-2">
+              {setupStep === 'mobile' || setupStep === 'otp' ? 'User Registration' : 'Set Up App PIN'}
+            </h3>
             <p className="text-slate-400 mb-8 text-sm">
-              {setupStep === 1 ? 'Enter a 4-digit PIN to secure your app.' : 'Confirm your 4-digit PIN.'}
+              {setupStep === 'mobile' ? 'Enter your mobile number to register.' 
+                : setupStep === 'otp' ? 'Enter the OTP sent to your mobile.' 
+                : setupStep === 'pin1' ? 'Enter a 4-digit PIN to secure your app.' 
+                : 'Confirm your 4-digit PIN.'}
             </p>
             
-            <div className="flex gap-4 justify-center mb-8 relative">
-              {[0, 1, 2, 3].map((index) => {
-                const val = setupStep === 1 ? setupPin : confirmPin;
-                return (
-                  <div 
-                    key={index} 
-                    className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                      val.length > index 
-                        ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] scale-110' 
-                        : 'bg-slate-800'
-                    }`} 
-                  />
-                );
-              })}
-              <input
-                type="number"
-                pattern="[0-9]*"
-                inputMode="numeric"
-                value={setupStep === 1 ? setupPin : confirmPin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0,4);
-                  if (setupStep === 1) setSetupPin(val);
-                  else setConfirmPin(val);
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
-                maxLength={4}
-                autoFocus
-              />
-            </div>
+            {setupStep === 'mobile' && (
+              <div className="mb-8">
+                <input
+                  type="tel"
+                  maxLength={10}
+                  placeholder="10-digit Mobile Number"
+                  value={setupMobile}
+                  onChange={(e) => setSetupMobile(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white text-center focus:outline-none focus:border-indigo-500 transition-colors"
+                  autoFocus
+                  required
+                />
+              </div>
+            )}
+
+            {setupStep === 'otp' && (
+              <div className="mb-8">
+                <input
+                  type="tel"
+                  maxLength={6}
+                  placeholder="6-digit OTP"
+                  value={setupOtp}
+                  onChange={(e) => setSetupOtp(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white text-center font-mono tracking-[0.5em] focus:outline-none focus:border-indigo-500 transition-colors"
+                  autoFocus
+                  required
+                />
+              </div>
+            )}
+
+            {(setupStep === 'pin1' || setupStep === 'pin2') && (
+              <div className="flex gap-4 justify-center mb-8 relative">
+                {[0, 1, 2, 3].map((index) => {
+                  const val = setupStep === 'pin1' ? setupPin : confirmPin;
+                  return (
+                    <div 
+                      key={index} 
+                      className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                        val.length > index 
+                          ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] scale-110' 
+                          : 'bg-slate-800'
+                      }`} 
+                    />
+                  );
+                })}
+                <input
+                  type="number"
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  value={setupStep === 'pin1' ? setupPin : confirmPin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0,4);
+                    if (setupStep === 'pin1') setSetupPin(val);
+                    else setConfirmPin(val);
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
+                  maxLength={4}
+                  autoFocus
+                />
+              </div>
+            )}
             
             <button
               type="submit"
-              disabled={(setupStep === 1 ? setupPin.length : confirmPin.length) !== 4}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg active:scale-95 mb-4"
+              disabled={
+                isSendingSms ||
+                (setupStep === 'mobile' && setupMobile.length !== 10) ||
+                (setupStep === 'otp' && setupOtp.length !== 6) ||
+                (setupStep === 'pin1' && setupPin.length !== 4) ||
+                (setupStep === 'pin2' && confirmPin.length !== 4)
+              }
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all shadow-lg active:scale-95 mb-4 flex items-center justify-center gap-2"
             >
-              {setupStep === 1 ? 'Next' : 'Confirm PIN'}
+              {isSendingSms ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+              {setupStep === 'mobile' ? 'Send OTP' : setupStep === 'otp' ? 'Verify OTP' : setupStep === 'pin1' ? 'Next' : 'Confirm PIN'}
             </button>
           </form>
         ) : loginLockoutTime ? (
@@ -660,7 +726,7 @@ return (
             
             {currentPage === 'gateway' && (
               <div className="max-w-4xl mx-auto h-full">
-                <SwiftPayGateway />
+                <SwiftPayGateway onBack={() => setCurrentPage("panel")} />
               </div>
             )}
             
@@ -697,6 +763,44 @@ return (
         </motion.div>
       </main>
           </div>
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {showShareModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700 max-w-sm w-full"
+            >
+              <div className="flex items-center justify-center w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full mb-4 mx-auto">
+                <Share2 className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-bold text-center text-slate-900 dark:text-white mb-2">How to Share</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6 leading-relaxed">
+                You are currently viewing the <strong className="text-slate-800 dark:text-slate-200">Development Preview</strong>. If you copy this URL, other people will get a <strong className="text-red-500">404 Not Found error</strong>.
+              </p>
+              
+              <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 mb-6">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">To share with others:</p>
+                <ol className="text-sm text-slate-600 dark:text-slate-400 space-y-2 list-decimal list-inside">
+                  <li>Look at the top-right corner of AI Studio.</li>
+                  <li>Click the <strong>Share</strong> button.</li>
+                  <li>Click <strong>Publish</strong> to generate a working public link.</li>
+                </ol>
+              </div>
+              
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-all"
+              >
+                I Understand
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

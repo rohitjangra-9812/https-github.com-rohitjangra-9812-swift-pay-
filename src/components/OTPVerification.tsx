@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Loader2, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
+import { SmsService } from "../services/SmsService";
 
 interface OTPVerificationProps {
   mobile: string;
@@ -15,22 +17,29 @@ export const OTPVerification = ({ mobile, onVerify, onChangeNumber }: OTPVerific
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    // Simulate sending an SMS
-    const timer = setTimeout(() => {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setSimulatedCode(code);
-      setShowNotification(true);
+    let isMounted = true;
+    const sendOtp = async () => {
+      const code = SmsService.generateOtp();
+      if (isMounted) setSimulatedCode(code);
       
-      // Auto-hide notification after 6 seconds
-      setTimeout(() => setShowNotification(false), 6000);
-    }, 200);
-    
-    return () => clearTimeout(timer);
-  }, []);
+      await SmsService.sendSms({
+        to: `+91 ${mobile}`,
+        message: `${code} is your SwiftPay verification code. Do not share this with anyone.`
+      });
+
+      if (isMounted) {
+        setShowNotification(true);
+        setTimeout(() => { if (isMounted) setShowNotification(false); }, 6000);
+      }
+    };
+    sendOtp();
+
+    return () => { isMounted = false; };
+  }, [mobile]);
 
   const handleVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp !== simulatedCode && otp !== "123456") {
+    if (otp !== simulatedCode) {
       setError(true);
       return;
     }

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { LockKeyhole, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { logSecurityEvent } from "../utils/securityLogs";
+import { SmsService } from "../services/SmsService";
 
 export const PinResetFlow = ({ 
   onCancel, 
@@ -21,10 +22,14 @@ export const PinResetFlow = ({
   const [aadhaarOtp, setAadhaarOtp] = useState("");
   const [mobileOtp, setMobileOtp] = useState("");
   
+  const [expectedEmailOtp, setExpectedEmailOtp] = useState<string | null>(null);
+  const [expectedMobileOtp, setExpectedMobileOtp] = useState<string | null>(null);
+  const [expectedAadhaarOtp, setExpectedAadhaarOtp] = useState<string | null>(null);
+  
   const [newPin, setNewPin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
@@ -34,24 +39,49 @@ export const PinResetFlow = ({
         setIsLoading(false);
         return;
       }
+      
+      const otp = SmsService.generateOtp();
+      setExpectedEmailOtp(otp);
+      
+      // Simulate Email sending...
       setTimeout(() => {
         setIsLoading(false);
         setResetStep("email_otp");
         toast.success(`Verification code sent to ${email}`);
-      }, 200);
+        toast.info(`📧 Email from SwiftPay: ${otp} is your verification code.`, { duration: 8000 });
+      }, 800);
+      
     } else if (resetStep === "email_otp") {
-      if (emailOtp.length !== 6) {
+      if (emailOtp !== expectedEmailOtp) {
         toast.error("Invalid Email OTP.");
         setIsLoading(false);
         return;
       }
-      setTimeout(() => {
-        setIsLoading(false);
+      
+      const mobOtp = SmsService.generateOtp();
+      const aadOtp = SmsService.generateOtp();
+      setExpectedMobileOtp(mobOtp);
+      setExpectedAadhaarOtp(aadOtp);
+      
+      try {
+        await SmsService.sendSms({
+          to: `+91 ${mobile}`,
+          message: `${mobOtp} is your SwiftPay Mobile verification code.`
+        });
+        
+        await SmsService.sendSms({
+          to: `Aadhaar Linked Mobile`,
+          message: `${aadOtp} is your Aadhaar verification code for SwiftPay.`
+        });
+        
         setResetStep("otp");
         toast.success("Email verified. OTPs sent to mobile and Aadhaar registered number.");
-      }, 200);
+      } finally {
+        setIsLoading(false);
+      }
+      
     } else if (resetStep === "otp") {
-      if (aadhaarOtp.length !== 6 || mobileOtp.length !== 6) {
+      if ((aadhaarOtp !== expectedAadhaarOtp) || (mobileOtp !== expectedMobileOtp)) {
         toast.error("Invalid OTPs.");
         setIsLoading(false);
         return;
@@ -137,6 +167,7 @@ export const PinResetFlow = ({
               <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Email Verification Code</label>
               <input 
                 type="tel" maxLength={6} placeholder="6-digit code" required
+                title="Enter any 6 digits for testing"
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono text-center tracking-[0.5em]"
                 value={emailOtp} onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
               />
@@ -149,6 +180,7 @@ export const PinResetFlow = ({
                 <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Aadhaar OTP</label>
                 <input 
                   type="tel" maxLength={6} placeholder="6-digit OTP" required
+                  title="Enter any 6 digits for testing"
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono text-center tracking-[0.5em]"
                   value={aadhaarOtp} onChange={(e) => setAadhaarOtp(e.target.value.replace(/\D/g, ''))}
                 />

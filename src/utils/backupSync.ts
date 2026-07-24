@@ -16,10 +16,15 @@ export const syncBankAccountState = async () => {
        return; // Nothing to sync
     }
 
+    const historyStr = localStorage.getItem('swiftpay_history');
+    const pointsStr = localStorage.getItem('swiftpay_points');
+
     const payload = {
        bankDetails: bankDetailsStr ? JSON.parse(bankDetailsStr) : null,
        bankAccounts: bankAccountsStr ? JSON.parse(bankAccountsStr) : null,
        isBankLinked: isBankLinked === "true",
+       history: historyStr ? JSON.parse(historyStr) : null,
+       points: pointsStr ? parseInt(pointsStr) : null,
        verifiedMobile: verifiedMobile,
        updatedAt: new Date().toISOString()
     };

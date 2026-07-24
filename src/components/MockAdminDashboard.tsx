@@ -564,7 +564,7 @@ export function MockAdminDashboard({
         setServerStatus(data);
       }
     } catch (err) {
-      console.error("Failed to load server diagnostic status:", err);
+      // console.error("Failed to load server diagnostic status:", err);
     } finally {
       setLoadingStatus(false);
     }

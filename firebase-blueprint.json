@@ -182,6 +182,9 @@
         },
         "updatedAt": {
           "type": "string"
+        },
+        "balance": {
+          "type": "number"
         }
       }
     }

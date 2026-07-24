@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Loader2, ScanFace } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanFace, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export const SwiftPayGateway = () => {
+export const SwiftPayGateway = ({ onBack }: { onBack?: () => void }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [paymentState, setPaymentState] = useState<'idle' | 'biometric' | 'processing' | 'success'>('idle');
 
@@ -95,6 +95,15 @@ export const SwiftPayGateway = () => {
   return (
     <div className="max-w-md mx-auto bg-slate-950 text-white rounded-3xl shadow-2xl border border-slate-900 relative min-h-screen pb-28">
       <div className="p-6">
+        {onBack && (
+          <button 
+            onClick={onBack}
+            className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+        )}
         {/* Header Section */}
         <div className="bg-indigo-900/30 p-6 rounded-3xl border border-indigo-500/30 mb-8">
           <h2 className="text-xs font-bold text-indigo-300 uppercase tracking-wider">⚡ Razorpay Secure Gateway</h2>

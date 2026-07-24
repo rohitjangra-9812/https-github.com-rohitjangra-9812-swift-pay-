@@ -1,4 +1,5 @@
 import { addBalance } from '../utils/balanceManager';
+import { syncBankAccountState } from '../utils/backupSync';
 import { formatCurrency } from '../utils/formatCurrency';
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, QrCode, Copy, Share2, IndianRupee } from "lucide-react";
@@ -131,6 +132,23 @@ export const ReceiveMoney = ({ onBack, bankDetails }: { onBack: () => void, bank
           onClick={() => {
              const amt = amount ? Number(amount) : Math.floor(Math.random() * 5000) + 100;
              addBalance(amt);
+             
+             // Save history
+             const tx = {
+                id: `TXN${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                type: 'received',
+                amount: amt,
+                recipient: 'Incoming Transfer',
+                date: new Date().toISOString(),
+                method: 'UPI_QR'
+             };
+             const saved = localStorage.getItem('swiftpay_history');
+             const history = saved ? JSON.parse(saved) : [];
+             history.unshift(tx);
+             localStorage.setItem('swiftpay_history', JSON.stringify(history));
+             window.dispatchEvent(new Event('swiftpay_history_updated'));
+             syncBankAccountState();
+             
              toast.success(`Successfully received ₹${amt}!`, { icon: '💰' });
           }}
           className="w-full max-w-sm bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 mb-3"

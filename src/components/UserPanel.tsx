@@ -1,6 +1,9 @@
 import { formatCurrency } from '../utils/formatCurrency';
 import { getBalance, deductBalance } from '../utils/balanceManager';
+import { syncBankAccountState } from '../utils/backupSync';
 import React, { useState, useEffect } from "react";
+import { db } from '../firebase';
+import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { QRCodeCanvas } from "qrcode.react";
 import {
   QrCode,
@@ -49,12 +52,10 @@ import { VoiceAssistant } from "./VoiceAssistant";
 import { RecentActivity } from "./RecentActivity";
 import { BudgetProgress } from "./BudgetProgress";
 import { TaxCalculator } from "./TaxCalculator";
-import { SharedVaults } from "./SharedVaults";
 import { RewardsProgram } from "./RewardsProgram";
 import { ThemeSelector } from "./ThemeSelector";
 import { LanguageSelector } from "./LanguageSelector";
 import { MerchantAnalytics } from "./MerchantAnalytics";
-import { MerchantProfiles } from "./MerchantProfiles";
 import { toast } from "sonner";
 
 import { BankAccountSetup } from "./BankAccountSetup";
@@ -160,9 +161,50 @@ export const UserPanel = ({
 }) => {
   const [activeAction, setActiveAction] = useState<any>(null);
   const [userBalance, setUserBalance] = useState(0);
+
   useEffect(() => {
     setUserBalance(getBalance());
-    const handleUpdate = (e: any) => setUserBalance(e.detail);
+    
+    const verifiedMobile = localStorage.getItem('swiftpay_verified_mobile');
+    if (!verifiedMobile) return;
+
+    const balanceRef = doc(db, 'user_backups', verifiedMobile);
+    
+    const unsubscribe = onSnapshot(balanceRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (typeof data.balance === 'number') {
+          setUserBalance(data.balance);
+          localStorage.setItem('swiftpay_user_balance', data.balance.toString());
+        }
+        if (data.history) {
+          localStorage.setItem('swiftpay_history', JSON.stringify(data.history));
+          window.dispatchEvent(new Event('swiftpay_history_updated'));
+        }
+        if (typeof data.points === 'number') {
+          localStorage.setItem('swiftpay_points', data.points.toString());
+          // Update points state via a custom event
+          window.dispatchEvent(new CustomEvent('swiftpay_points_updated', { detail: data.points }));
+        }
+      } else {
+        const currentBal = getBalance();
+        setDoc(balanceRef, { balance: currentBal, updatedAt: serverTimestamp() }, { merge: true }).catch(console.error);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      const newBal = e.detail;
+      setUserBalance(newBal);
+      const verifiedMobile = localStorage.getItem('swiftpay_verified_mobile');
+      if (verifiedMobile) {
+        const balanceRef = doc(db, 'user_backups', verifiedMobile);
+        setDoc(balanceRef, { balance: newBal, updatedAt: serverTimestamp() }, { merge: true }).catch(console.error);
+      }
+    };
     window.addEventListener('balance_updated', handleUpdate);
     return () => window.removeEventListener('balance_updated', handleUpdate);
   }, []);
@@ -200,9 +242,13 @@ export const UserPanel = ({
   const [biometricEnabled, setBiometricEnabled] = useState(() => localStorage.getItem("swiftpay_biometric_enabled") === "true");
   const [privacyMode, setPrivacyMode] = useState(() => localStorage.getItem("swiftpay_privacy_mode") === "true");
   const [swiftPoints, setSwiftPoints] = useState(() => Number(localStorage.getItem("swiftpay_points")) || 1250);
+  useEffect(() => {
+    const handlePointsUpdate = (e: any) => setSwiftPoints(e.detail);
+    window.addEventListener('swiftpay_points_updated', handlePointsUpdate);
+    return () => window.removeEventListener('swiftpay_points_updated', handlePointsUpdate);
+  }, []);
   const [theme, setTheme] = useState(() => localStorage.getItem("swiftpay_theme") || "slate");
   const [language, setLanguage] = useState(() => localStorage.getItem("swiftpay_lang") || "en");
-  const [merchantProfile, setMerchantProfile] = useState(() => localStorage.getItem("swiftpay_merchant_profile") || "store_1");
   const [highValueThreshold, setHighValueThreshold] = useState(() => {
     const saved = localStorage.getItem('swiftpay_high_value_threshold');
     return saved ? parseInt(saved) : 10000;
@@ -306,12 +352,7 @@ export const UserPanel = ({
       bg: "bg-purple-400/10",
     },
     {
-      id: "receive", label: "Receive Money", icon: QrCode, color: "text-emerald-400", bg: "bg-emerald-400/10" }, { id: "scan",
-      label: "Scan QR",
-      icon: QrCode,
-      color: "text-indigo-400",
-      bg: "bg-indigo-400/10",
-    },
+      id: "receive", label: "Receive Money", icon: QrCode, color: "text-emerald-400", bg: "bg-emerald-400/10" },
     {
       id: "upload",
       label: "Upload QR",
@@ -438,6 +479,7 @@ export const UserPanel = ({
       history.unshift(tx);
       localStorage.setItem('swiftpay_history', JSON.stringify(history));
       window.dispatchEvent(new Event('swiftpay_history_updated'));
+      syncBankAccountState();
 
       // Gamified Rewards System
       const pointsEarned = Math.floor(Number(amount || 0) / 100);
@@ -961,7 +1003,7 @@ export const UserPanel = ({
           </div>
 
           <div className="mb-6">
-            <p className="text-xs text-indigo-200/70 uppercase tracking-wider mb-1">Available Balance</p>
+            <p className="text-xs text-indigo-200/70 uppercase tracking-wider mb-1">Account Balance</p>
             <h2 className="text-3xl font-black text-white">
               {privacyMode ? '••••••••' : formatCurrency(userBalance)}
             </h2>
@@ -1086,11 +1128,6 @@ export const UserPanel = ({
             />
           },
           {
-            id: 'vaults',
-            title: 'Group Vaults',
-            component: <SharedVaults />
-          },
-          {
             id: 'tax_calculator',
             title: 'Tax Calculator',
             component: <TaxCalculator />
@@ -1099,17 +1136,6 @@ export const UserPanel = ({
             id: 'merchant_analytics',
             title: 'Business Analytics',
             component: <MerchantAnalytics />
-          },
-          {
-            id: 'merchant_profiles',
-            title: 'Business Profiles',
-            component: <MerchantProfiles 
-              currentProfile={merchantProfile} 
-              onSelectProfile={(p) => {
-                setMerchantProfile(p);
-                localStorage.setItem('swiftpay_merchant_profile', p);
-              }} 
-            />
           },
           {
             id: 'activity',
@@ -1311,14 +1337,26 @@ export const UserPanel = ({
         </div>
       </div>
 
-      {/* Floating Currency Converter Button */}
+      {/* Floating Actions */}
       {!showCurrencyConverter && !showSecuritySettings && !activeAction && !scannedData && !pendingRequest && (
-        <button 
-          onClick={() => setShowCurrencyConverter(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.5)] hover:bg-indigo-500 transition-all z-40 group"
-        >
-          <Globe className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
-        </button>
+        <>
+          <button 
+            onClick={() => setActiveAction({ id: 'scan', label: 'Scan QR', icon: QrCode })}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 h-14 bg-indigo-600 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(79,70,229,0.5)] hover:bg-indigo-500 transition-all z-40 group border border-indigo-400/30"
+          >
+            <div className="flex items-center gap-3">
+              <QrCode className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
+              <span className="text-white font-bold tracking-wider">SCAN & PAY</span>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => setShowCurrencyConverter(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center shadow-lg hover:bg-slate-700 transition-all z-40 group border border-slate-700"
+          >
+            <Globe className="w-5 h-5 text-slate-300 group-hover:scale-110 transition-transform" />
+          </button>
+        </>
       )}
 
       {showCurrencyConverter && (

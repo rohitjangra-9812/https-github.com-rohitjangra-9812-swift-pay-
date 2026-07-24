@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SwiftPay Gateway</title>
+  
+  <!-- PWA Manifest Configuration -->
+  <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22SwiftPay%20Gateway%22%2C%22short_name%22%3A%22SwiftPay%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230d1117%22%2C%22theme_color%22%3A%22%236366f1%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F1099%2F1099689.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%7D%5D%7D">
+  <meta name="theme-color" content="#6366f1">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #0d1117;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    .card {
+      background: #161b22;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      border: 1px solid #30363d;
+      max-width: 320px;
+      width: 90%;
+    }
+    h2 { margin-top: 0; color: #58a6ff; font-size: 22px; }
+    p { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+    #install-btn {
+      background-color: #238636;
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      display: none;
+      transition: background 0.2s;
+    }
+    #install-btn:hover { background-color: #2ea043; }
+    .status { font-size: 12px; color: #8b949e; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>SwiftPay App</h2>
+    <p>Tap below to install this gateway directly to your mobile device as a standalone application.</p>
+    
+    <!-- Install Action Button -->
+    <button id="install-btn">Install Application</button>
+    <div id="status-text" class="status">Checking installation support...</div>
+  </div>
+
+  <script>
+    // 1. Register Inline Service Worker for PWA Support
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        self.addEventListener('fetch', (event) => {
+          event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+        });
+      `;
+      const blob = new Blob([swCode], { type: 'text/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      
+      navigator.serviceWorker.register(swUrl)
+        .then(() => console.log('PWA Service Worker active'))
+        .catch((err) => console.log('SW registration failed', err));
+    }
+
+    // 2. Capture and Trigger Native Install Prompt
+    let deferredPrompt;
+    const installBtn = document.getElementById('install-btn');
+    const statusText = document.getElementById('status-text');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent automatic mini-infobar
+      e.preventDefault();
+      deferredPrompt = e;
+      
+      // Reveal install button
+      installBtn.style.display = 'block';
+      statusText.textContent = 'Ready to install on your device';
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      
+      // Trigger the native OS/browser app installation prompt
+      deferredPrompt.prompt();
+      
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        statusText.textContent = 'App installed successfully!';
+        installBtn.style.display = 'none';
+      }
+      deferredPrompt = null;
+    });
+
+    // Detect if already installed or unsupported
+    window.addEventListener('appinstalled', () => {
+      statusText.textContent = 'App is already installed.';
+      installBtn.style.display = 'none';
+    });
+
+    // Fallback info if running inside an un-installable iframe context
+    setTimeout(() => {
+      if (installBtn.style.display !== 'block' && !window.matchMedia('(display-mode: standalone)').matches) {
+        statusText.textContent = 'Open this link directly in mobile Chrome/Edge/Safari browser to enable installation.';
+      }
+    }, 1500);
+  </script>
+
+</body>
+</html>
